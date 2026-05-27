@@ -1,0 +1,39 @@
+extends ui_layout
+
+block styles 
+  link(type='text/css', rel='stylesheet', href='/public/css/info.css')
+
+block content
+  .ui.text.container(style="margin-top: 2em; margin-bottom: 2em;")
+    h1(style="text-align: center;") Welcome to Hiloapp.com!
+    h3 Here's what you can do on the site.
+    ul
+        li Create new posts! Upload existing photos or take new photos with your phone.
+        li Reply to others' posts to get a conversation going.
+        li Like others' posts to show you love their snaps!
+        li Fill out your profile. You can add as much or as little info as you want.
+        li When the Notification Bell is red, that means you have new Notifications, be sure to check them out!
+    img.ui.centered.image(src='/public/esl-howto.png')
+    h3 See who else is around.
+    p We'll notify you if someone replies to or likes your post or comment.
+    .ui.big.green.button.interest
+        img#logo(src=process.env.SITE_LOGO)
+        span Continue
+    //- .ui.big.green.labeled.icon.button.interest
+    //-     //- i.rocket.icon
+    //-     img.ui.tiny.image(src=process.env.SITE_LOGO, id='logo')
+    //-     //- i.ui.tiny.icon(src=process.env.SITE_LOGO, id='logo')
+    //-     |   Continue
+
+    script.
+        $('.ui.button.interest').on('click', function() {
+        //- $('.ui.big.green.labeled.icon.button.interest').on('click', function() {
+            $(this).addClass('loading disabled');
+            $.post("/account/consent", {
+                    _csrf: $('meta[name="csrf-token"]').attr('content')
+                }).done(function(json) {
+                    if (json["result"] === "success") {
+                        window.location.href = '/'
+                    }
+                });
+        });
