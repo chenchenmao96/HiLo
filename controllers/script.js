@@ -140,22 +140,16 @@ exports.getScript = async (req, res, next) => {
 
     // If the user is no longer active, log them out
     if (!user.active) {
-      req.logout((err) => {
-        if (err) console.log("Error : Failed to logout.", err);
-        req.session.destroy((err) => {
-          if (err)
-            console.log(
-              "Error : Failed to destroy the session during logout.",
-              err
-            );
-          req.user = null;
-          req.flash("errors", {
-            msg: "Account is no longer active. Study is over.",
-          });
-          res.redirect(
-            "/login" + (req.query.r_id ? `?r_id=${req.query.r_id}` : "")
-          );
+      return req.logout((err) => {
+        if (err) return next(err);
+
+        req.user = null;
+        req.flash("errors", {
+          msg: "Account is no longer active. Study is over.",
         });
+        return res.redirect(
+          "/login" + (req.query.r_id ? `?r_id=${req.query.r_id}` : "")
+        );
       });
     }
 
