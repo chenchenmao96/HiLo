@@ -33,8 +33,8 @@ function renderMakePostGate(res, user) {
 
 function renderEndExperiment(res, user) {
   return res.render("condition_gate", {
-    title: "End of Experiment",
-    message: "Thank you for participating. The experiment is now complete.",
+    title: "Thank you for participating.",
+    message: "All sessions are now over! Please wait for the researcher.",
     button: null,
     userCreatedAt: user.createdAt
   });

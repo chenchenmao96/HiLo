@@ -57,6 +57,9 @@ block content
           
 block scripts
   script().
+    let numComments = !{JSON.stringify(user.numComments)};
+
+  script().
     // Condition timing logic (client-side)
     function getConditionState(clientStart, windowMs = 180000) {
       const elapsed = Date.now() - clientStart;
