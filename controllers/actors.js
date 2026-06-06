@@ -24,10 +24,31 @@ exports.getActors = async(req, res) => {
     }
 };
 
-function computeCondition(startTime, windowMs = 180000, totalConditions = 4) {
-  const elapsed = Date.now() - new Date(startTime).getTime();
-  const index = Math.floor(elapsed / windowMs) % totalConditions;
-  return index + 1;
+function applyActorPostDisplayTimes(posts, user) {
+    const baseTime = new Date(user.createdAt).getTime();
+    const now = Date.now();
+
+    for (const post of posts) {
+        if (!post.display_time) {
+            const offset = Number(post.time) || 0;
+            post.display_time = baseTime + offset;
+        } else {
+            post.display_time = now - (Number(post.display_time) * 24 * 60 * 60 * 1000);
+        }
+
+        if (Array.isArray(post.comments)) {
+            post.comments.forEach((comment) => {
+                if (!comment.display_time) {
+                    const offset = Number(comment.time) || 0;
+                    comment.display_time = baseTime + offset;
+                } else {
+                    const commentDisplayTime = now - (Number(comment.display_time) * 24 * 60 * 60 * 1000);
+                    comment.display_time = commentDisplayTime;
+                    comment.time = commentDisplayTime - baseTime;
+                }
+            });
+        }
+    }
 }
 
 /**
@@ -38,7 +59,6 @@ function computeCondition(startTime, windowMs = 180000, totalConditions = 4) {
  * Render the actor's profile page along with the relevant data.
  */
 exports.getActor = async(req, res, next) => {
-    const time_diff = Date.now() - req.user.createdAt;
     try {
         const user = await User.findById(req.user.id).exec();
         const actor = await Actor.findOne({ username: req.params.userId }).exec();
@@ -49,7 +69,7 @@ exports.getActor = async(req, res, next) => {
         const isBlocked = user.blocked.includes(req.params.userId);
         const isReported = user.reported.includes(req.params.userId);
 
-        const currentCondition = computeCondition(user.createdAt, 180000, 4); //15000 for testing, 180000 for real use
+        const currentCondition = user.condition;
 
         // Fixed query to show actor posts when clicking on specific profiles. May have to update for condition later. 
         const script_feed = await Script.find({
@@ -68,6 +88,7 @@ exports.getActor = async(req, res, next) => {
             populate: { path: "profile", select: "name picture" },
         })
         .exec();
+        applyActorPostDisplayTimes(script_feed, user);
 
         const finalfeed = helpers.getFeed([], script_feed, user, 'CHRONOLOGICAL', (process.env.REMOVE_FLAGGED_CONTENT == 'TRUE'), false);
         await user.save();

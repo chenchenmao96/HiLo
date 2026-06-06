@@ -58,6 +58,7 @@ block content
 block scripts
   script().
     let numComments = !{JSON.stringify(user.numComments)};
+    window.scheduledUserPostActivity = !{JSON.stringify(scheduledUserPostActivity || [])};
 
   script().
     // Condition timing logic (client-side)

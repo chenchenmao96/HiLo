@@ -274,7 +274,82 @@ function followUser(e) {
     }
 }
 
-$(window).on('load', () => {
+function escapeHtml(value) {
+    return $('<div>').text(value || '').html();
+}
+
+function applyScheduledUserPostActivity(event) {
+    const card = $(`.ui.fluid.card[type='userPost'][postID='${event.postID}']`).first();
+    if (!card.length) return;
+
+    if (event.type === 'like') {
+        const label = card.find('a.ui.basic.red.left.pointing.label.count').first();
+        const currentLikes = parseInt(label.text(), 10) || 0;
+        label.text(currentLikes + 1);
+        return;
+    }
+
+    if (event.type === 'comment') {
+        if (card.find(`.ui.comments .comment[commentID='${event.commentID}']`).length) return;
+
+        let comments = card.find('.ui.comments').first();
+        if (!comments.length) {
+            card.children('.extra.content').first().before('<div class="content"><div class="ui comments"></div></div>');
+            comments = card.find('.ui.comments').first();
+        }
+
+        const actor = event.actor || {};
+        const username = escapeHtml(actor.username);
+        const actorName = escapeHtml(actor.name || actor.username || '');
+        const actorPicture = actor.picture ? `/profile_pictures/${escapeHtml(actor.picture)}` : '/public/picture.svg';
+        const time = event.at ? humanized_time_span(new Date(event.at)) : '';
+        const body = escapeHtml(event.body);
+
+        comments.append(`
+            <div class="comment" commentID="${escapeHtml(event.commentID)}">
+                <a class="avatar image" href="/user/${username}">
+                    <img class="ui avatar image" src="${actorPicture}">
+                </a>
+                <div class="content">
+                    <a class="author" href="/user/${username}">${actorName}</a>
+                    <div class="metadata">
+                        <span class="date">${time}</span>
+                    </div>
+                    <div class="text">${body}</div>
+                </div>
+            </div>
+        `);
+    }
+}
+
+function scheduleUserPostActivity() {
+    if (!Array.isArray(window.scheduledUserPostActivity)) return;
+
+    window.userPostActivityTimers = window.userPostActivityTimers || [];
+    window.userPostActivityTimers.forEach(clearTimeout);
+    window.userPostActivityTimers = [];
+    window.appliedScheduledUserPostActivity = window.appliedScheduledUserPostActivity || {};
+
+    window.scheduledUserPostActivity.forEach(function(event) {
+        const key = `${event.type}:${event.postID}:${event.commentID || event.at}`;
+        if (window.appliedScheduledUserPostActivity[key]) return;
+
+        const delay = Math.max(0, Number(event.at) - Date.now());
+        const timer = setTimeout(function() {
+            if (window.appliedScheduledUserPostActivity[key]) return;
+            window.appliedScheduledUserPostActivity[key] = true;
+            applyScheduledUserPostActivity(event);
+        }, delay);
+
+        window.userPostActivityTimers.push(timer);
+    });
+}
+
+function initPostFunctionalities() {
+    $(`#content .fluid.card .img img, #content img.ui.avatar.image, #content a.avatar img, .ui.card .image img`).visibility({
+        type: 'image'
+    });
+
     // add humanized time to all posts, including display_time strings
     $('.right.floated.time.meta, .date').each(function() {
         const raw = $(this).text().trim();
@@ -294,13 +369,13 @@ $(window).on('load', () => {
 
     // ************ Actions on Main Post ***************
     // Focus new comment element if "Reply" button is clicked
-    $('.reply.button').on('click', function() {
+    $('.reply.button').off('click.postFunctionalities').on('click.postFunctionalities', function() {
         let parent = $(this).closest(".ui.fluid.card");
         parent.find("textarea.newcomment").focus();
     });
 
     // Press enter to submit a comment
-    $("textarea.newcomment").keydown(function(event) {
+    $("textarea.newcomment").off('keydown.postFunctionalities').on('keydown.postFunctionalities', function(event) {
         if (event.key === "Enter" && !event.shiftKey) {
             event.preventDefault();
             event.stopImmediatePropagation();
@@ -309,10 +384,10 @@ $(window).on('load', () => {
     });
 
     // Create a new Comment
-    $("i.big.send.link.icon").on('click', addComment);
+    $("i.big.send.link.icon").off('click.postFunctionalities').on('click.postFunctionalities', addComment);
 
     // Like/Unlike Post
-    $('.like.button').on('click', likePost);
+    $('.like.button').off('click.postFunctionalities').on('click.postFunctionalities', likePost);
 
     // // Flag Post
     // $('.flag.button').on('click', flagPost);
@@ -331,7 +406,7 @@ $(window).on('load', () => {
     // $("a.unflag").click(unflagComment);
 
     // Follow button
-    $('.ui.basic.primary.follow.button').on('click', followUser);
+    $('.ui.basic.primary.follow.button').off('click.postFunctionalities').on('click.postFunctionalities', followUser);
 
     // Track how long a post is on the screen (borders are defined by image)
     // Start time: When the entire photo is visible in the viewport.
@@ -417,4 +492,10 @@ $(window).on('load', () => {
             }
         }
     });
-});
+
+    scheduleUserPostActivity();
+}
+
+window.initPostFunctionalities = initPostFunctionalities;
+
+$(window).on('load', initPostFunctionalities);

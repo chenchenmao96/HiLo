@@ -29,7 +29,7 @@ exports.getNotifications = async(req, res) => {
                         { userPostID: { $exists: true } },
                         { userReplyID: { $exists: true } }
                     ],
-                    condition: currentCondition
+                    condition: { "$in": ["", currentCondition] }
                 })
                 .populate('actor')
                 .sort('-time')
@@ -218,9 +218,16 @@ exports.getNotifications = async(req, res) => {
                 .exec();
             const finalfeed = helpers.getFeed(userPosts, posts, user, 'NOTIFICATION');
 
-            const newNotificationCount = final_notify.filter(notification => notification.unreadNotification == true).length;
+            const unreadNotifications = final_notify.filter(notification => notification.unreadNotification == true);
+            const newNotificationCount = unreadNotifications.length;
+            const latestUnreadNotificationTime = unreadNotifications.reduce(function(latest, notification) {
+                return Math.max(latest, notification.time || 0);
+            }, 0);
             if (req.query.bell) {
-                return res.send({ count: newNotificationCount });
+                return res.send({
+                    count: newNotificationCount,
+                    latestNotificationTime: latestUnreadNotificationTime
+                });
             } else {
                 return res.render('notification', {
                     notification_feed: final_notify,

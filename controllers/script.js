@@ -49,7 +49,7 @@ async function applyScheduledUserPostLikes(user) {
     const scheduledLikes = await Notification.find({
       condition: { "$in": ["", condition] },
       notificationType: "like",
-      userReplyID: { $exists: false },
+      userPostID: { $exists: true },
       time: { $lte: elapsed }
     }).exec();
 
@@ -100,6 +100,56 @@ async function ensureScheduledUserPostReplies(user) {
   }
 
   return addedReply;
+}
+
+async function getScheduledUserPostActivity(user, posts) {
+  const events = [];
+  const now = Date.now();
+
+  for (const post of posts) {
+    const condition = String(post.condition || "");
+    if (!condition || !post.absTime) continue;
+
+    const postTime = new Date(post.absTime).getTime();
+    const elapsed = now - postTime;
+    const futureLikes = await Notification.find({
+      condition: { "$in": ["", condition] },
+      notificationType: "like",
+      userPostID: { $exists: true },
+      time: { $gt: elapsed }
+    }).sort("time").exec();
+
+    for (const like of futureLikes) {
+      events.push({
+        type: "like",
+        postID: post.postID,
+        at: postTime + like.time
+      });
+    }
+
+    for (const comment of post.comments || []) {
+      if (comment.new_comment || comment.flagged || !comment.absTime) continue;
+
+      const commentTime = new Date(comment.absTime).getTime();
+      if (commentTime <= now) continue;
+
+      const actor = comment.actor || {};
+      events.push({
+        type: "comment",
+        postID: post.postID,
+        commentID: comment.commentID,
+        body: comment.body,
+        at: commentTime,
+        actor: {
+          username: actor.username,
+          name: actor.profile && actor.profile.name,
+          picture: actor.profile && actor.profile.picture
+        }
+      });
+    }
+  }
+
+  return events.sort((a, b) => a.at - b.at);
 }
 
 /**
@@ -263,6 +313,7 @@ exports.getScript = async (req, res, next) => {
     // Use plain objects for display so filtering future comments does not delete
     // scheduled actor comments from the user's saved post document.
     let user_posts = currentConditionPosts.slice(0, 1).map(post => post.toObject ? post.toObject() : post);
+    const scheduledUserPostActivity = await getScheduledUserPostActivity(user, currentConditionPosts.slice(0, 1));
 
     const finalfeed = helpers.getFeed(
       user_posts,
@@ -281,6 +332,7 @@ exports.getScript = async (req, res, next) => {
       script: finalfeed,
       showNewPostIcon: false,
       conditionStartTime: user.conditionStart,
+      scheduledUserPostActivity,
     });
   } catch (err) {
     next(err);

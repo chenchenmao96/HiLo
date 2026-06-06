@@ -67,7 +67,7 @@ $(window).on("load", function() {
     // Fomantic UI: Enable checkboxes
     $('.checkbox').checkbox();
 
-    // Check if user has any notifications every 5 seconds.
+    // Check if user has any notifications.
     if (window.location.pathname !== '/login' && window.location.pathname !== '/signup' && window.location.pathname !== '/forgot') {
         $.post("/pageLog", {
             path: window.location.pathname,

@@ -18,6 +18,42 @@ function shuffle(array) {
     return array;
 }
 
+function getPostSortTime(post, user) {
+    if (!post) return 0;
+
+    if (post.absTime) {
+        const absTime = new Date(post.absTime).getTime();
+        if (!Number.isNaN(absTime)) return absTime;
+    }
+
+    if (post.display_time !== undefined && post.display_time !== null && post.display_time !== '') {
+        const displayTime = Number(post.display_time);
+        if (Number.isFinite(displayTime)) {
+            if (displayTime > 100000000000) return displayTime;
+            return Date.now() - (displayTime * 24 * 60 * 60 * 1000);
+        }
+
+        const parsedDisplayTime = new Date(post.display_time).getTime();
+        if (!Number.isNaN(parsedDisplayTime)) return parsedDisplayTime;
+    }
+
+    if (post.time !== undefined && post.time !== null && user && user.createdAt) {
+        const relativeTime = Number(post.time);
+        if (Number.isFinite(relativeTime)) {
+            return new Date(user.createdAt).getTime() + relativeTime;
+        }
+    }
+
+    if (post.relativeTime !== undefined && post.relativeTime !== null && user && user.createdAt) {
+        const relativeTime = Number(post.relativeTime);
+        if (Number.isFinite(relativeTime)) {
+            return new Date(user.createdAt).getTime() + relativeTime;
+        }
+    }
+
+    return 0;
+}
+
 /**
  * This is a helper function, called in .getNotifications() (./notifications.js controller file), .getScript() (./script.js controller file), .getActor() (./actors.js controller file).
  * It takes in a list of user posts, a list of actor posts, a User document, and other parameters, and it processes and generates a final feed of posts for the user based on these parameters.
@@ -38,12 +74,18 @@ exports.getFeed = function(user_posts, script_feed, user, order, removeFlaggedCo
     let finalfeed_seen = [];
     let finalfeed_unseen = [];
 
+    user_posts.sort(function(a, b) {
+        return getPostSortTime(b, user) - getPostSortTime(a, user);
+    });
+    script_feed.sort(function(a, b) {
+        return getPostSortTime(b, user) - getPostSortTime(a, user);
+    });
+
     // While there are actor posts or user posts to add to the final feed
     while (script_feed.length || user_posts.length) {
-        // If there are no more script_feed posts or if user_post[0] post is more recent than script_feed[0] post, then add user_post[0] post to the finalfeed.
-        // Else, add script_feed[0] post to the finalfeed.
-        if (script_feed[0] === undefined ||
-            ((user_posts[0] !== undefined) && (script_feed[0].time < user_posts[0].relativeTime))) {
+        // Participant posts are always pinned above actor posts. Sort each group by
+        // display time, but do not interleave actor posts above participant posts.
+        if (user_posts[0] !== undefined) {
             // Filter comments to include only past simulated comments, not future simulated comments. 
             user_posts[0].comments = user_posts[0].comments.filter(comment => comment.absTime < Date.now());
             // Sort comments from least to most recent.
@@ -172,7 +214,7 @@ exports.getFeed = function(user_posts, script_feed, user, order, removeFlaggedCo
         // Shuffle the feed
         finalfeed_seen = shuffle(finalfeed_seen);
         finalfeed_unseen = shuffle(finalfeed_unseen);
-        finalfeed = finalfeed_unseen.concat(finalfeed_seen);
+        finalfeed = finalfeed.concat(finalfeed_unseen, finalfeed_seen);
     }
     return finalfeed;
 };
